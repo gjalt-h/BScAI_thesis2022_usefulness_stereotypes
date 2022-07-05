@@ -4,21 +4,19 @@
 # Date: May 2nd 2022
 # Supervisor: Katrin Schulz
 # 
-# Description: creating a Rescorla wagner 
-# model to assess usefulness influence on 
+# Description: Base model simulating the
 # formation of stereotypes as researched
-# by Martin et al. (2014).
+# by Martin et al. (2014). 
 # ---------------------------------------
 
 import numpy as np
 import random
 import matplotlib.pyplot as plt
 import json
-# from prometheus_client import Counter
 import scipy.stats as st
 
 # own implementation of rescorla wagner update
-def res_wag_update(assoc, comp_val, present, alpha = 0.1, beta1 = 0.4, beta2 = 0.1, v_max = 1):
+def res_wag_update(assoc, comp_val, present, alpha = 0.07, beta1 = 0.4, beta2 = 0.1, v_max = 1):
     # compute the prediction error
     if present is True: 
         error_pred = v_max - comp_val 
@@ -67,7 +65,7 @@ def limited_recall(prob_dist, threshold):
     for i in range(len(indexes)):
         limited[indexes[i]] = values[i]
     
-    # normalize distribution
+    # normalise distribution
     normalizer = np.sum(limited)
     for j in range(len(limited)):
         limited[j] = limited[j] / normalizer
@@ -75,8 +73,8 @@ def limited_recall(prob_dist, threshold):
     return limited
 
 
-# 0 is color, 1 is shape, 2 is movement  # extra ratio is for 1 exception, the last attribute 48.
-def init_aliens(n_att, total_n_att, n_feat, ratio=1, extra_ratio=20): # ratio is between groups, so actually double for useful:others
+# 0 is color, 1 is shape, 2 is movement
+def init_aliens(n_att, total_n_att, n_feat): 
     # create unique aliens with n features
     n_aliens = n_feat**(n_feat)
     aliens = {}
@@ -89,48 +87,12 @@ def init_aliens(n_att, total_n_att, n_feat, ratio=1, extra_ratio=20): # ratio is
     # for each alien create assigned attribute list
     attributes_ass = []
 
-    # create prob dist for sampling
-    prob_dist = []
-    for group in range(3):
-        if group < 2:
-            for _ in range(16):
-                prob_dist.append(ratio)
-        elif group == 2:
-            for _ in range(16):
-                prob_dist.append(1)
-            prob_dist[-1] = 0 #  0 means that exception only occurs with 1 group
-            # prob_dist.append(1/extra_ratio) 
-    total = sum(prob_dist)
-    for j in range(len(prob_dist)):
-        prob_dist[j] = prob_dist[j] / total
-
     for _ in range(n_aliens):
-        attributes_ass.append(np.random.choice(range(total_n_att), size=n_att, replace=False, p=prob_dist))
-
-    # create 1 exception
-    attributes_ass[26][5] = 47
+        attributes_ass.append(np.random.choice(range(total_n_att), size=n_att))
     
     return(aliens, attributes_ass)
 
 aliens = init_aliens(6,48,3)[0]
-
-# higher attribute is higher usefulness # alpha 0.07, V=0.8
-def division_useful(att, total_n_att=48, alpha_less=0.05, alpha=0.1,
-                alpha_more=0.1, V_less=0.25, V=1, V_more=1, alpha_extra=0.1, V_extra=1.2):
-    # if att < total_n_att // 3:
-    #     return alpha_less, V_less
-    # elif att < 2*total_n_att // 3:
-    #     return alpha, V
-    # else:
-    #     # if att == 47:
-    #     #     return alpha_extra, V_extra
-    #     return alpha_more, V_more
-
-    # # for now without division for easy change
-    # if att == 47:
-    #     return alpha_extra, V_extra
-
-    return alpha, V
 
 
 # create initial associations dictionary with base values
@@ -152,7 +114,7 @@ def init_associations(n_feat, n_var, total_n_att):
     return assoc_dict
 
 
-def experiment(n_sequences=20, sequence_len=7, views=3, recall=.8,
+def experiment(n_sequences=100, sequence_len=7, views=3, recall=.8,
             train_size=13, n_att=6, total_n_att=48, n_feat=3, n_var=3):
     # setting up the experiment -----------------------    
     results = []
@@ -165,9 +127,6 @@ def experiment(n_sequences=20, sequence_len=7, views=3, recall=.8,
         # generate aliens and assigned attributes
         aliens, att_ass = init_aliens(n_att, total_n_att, n_feat)
         sequence_ass.append(att_ass)
-
-        # # create starting dictionary of associations
-        # associations = init_associations(n_feat, n_var, total_n_att)
 
     # actual experiment ----------------------------
         # iterate n times per sequence
@@ -207,8 +166,8 @@ def experiment(n_sequences=20, sequence_len=7, views=3, recall=.8,
                         # run R-W formula
                         for feat, alien_var in enumerate(alien_feat):
                             
-                            alpha_att, V_att = division_useful(att)
-
+                            alpha_att = 0.07
+                            V_att = 0.5
                             # with colour salience ---------------------------
                             if feat == 0:
                                 alpha_att = alpha_att * 1.3
@@ -216,7 +175,7 @@ def experiment(n_sequences=20, sequence_len=7, views=3, recall=.8,
                             # ------------------------------------------------
 
                             curr_assoc = associations[feat][alien_var][att] 
-                            new_assoc = res_wag_update(curr_assoc, comp_value, present = presence, alpha=alpha_att, v_max=V_att)
+                            new_assoc = res_wag_update(curr_assoc, comp_value, present = presence, alpha = alpha_att, v_max = V_att)
                             associations[feat][alien_var][att] = new_assoc
                     # -----------------------------------------------------
 
@@ -231,25 +190,7 @@ def experiment(n_sequences=20, sequence_len=7, views=3, recall=.8,
                 # find the corresponding associations
                 for feat in range(n_feat):
                     alien_assocs.append(associations[feat][aliens[key][feat]])
-                
-                # # new idea: first recall, then average -----------------------
-                # prob_dists = []
-                # for assocs in alien_assocs:
-                #     prob_dists.append([(assoc / np.sum(assocs)) for assoc in assocs])
 
-                # lim_prob_dists = []
-                # for probs in prob_dists:
-                #     lim_prob_dists.append(limited_recall(probs,recall))
-
-                # prob_dist = []
-                # for att in range(total_n_att):
-                #     sum = 0
-                #     for feat in range(n_feat):
-                #         sum += lim_prob_dists[feat][att]
-                #     prob_dist.append(sum / n_feat)
-                # # ---------------------------------------------------------------
-
-                # first implementation (combine and then lim recall) ---------------
                 # calculate mean for each attribute
                 combined_assoc = []
                 for att in range(total_n_att):
@@ -263,9 +204,6 @@ def experiment(n_sequences=20, sequence_len=7, views=3, recall=.8,
                 # apply limited recall here
                 prob_dist = limited_recall(prob_dist,recall)
                 # --------------------------------------------------------------------
-
-                # eerst prob dist dan combi dan recall uitproberen, kijken wat er dan gebeurt
-                # 
 
                 # pick from retrieved prob dist
                 alien_ass = np.random.choice(range(total_n_att), size=n_att, p=prob_dist, replace=False)
@@ -298,7 +236,6 @@ def sequence_to_mean_error(sequences, ci=0.95):
         for sequence in sequences:
             data.append(sequence[i])
         means.append(np.mean(data))
-        # from https://www.statology.org/confidence-intervals-python/
         data = np.array(data)
         lower, upper = st.t.interval(alpha=ci, df=len(data)-1, loc=np.mean(data), scale=st.sem(data)) 
         lowers.append(lower)
@@ -347,29 +284,13 @@ def unique_list(results):
 unique_res, unique_mean = unique_list(results)
 
 
-def eval_unique(results):
-    # plot each sequence
-    for sequence in results:
-        plt.plot(range(len(sequence)), unique_occ(sequence))
-
-    # create plot
-    plt.xlabel('iteration')
-    plt.ylabel('n unique attributes')
-    plt.ylim((6,48))
-    plt.title('Simplification over iterations')
-    plt.savefig('../graphs/uniqueness.jpg')
-    plt.close()
-
-# # run unique graphs result
-eval_unique(results)
-
 def eval_unique_err(sequences):
     means, errors = sequence_to_mean_error(sequences)
     plt.errorbar(range(len(means)), means, yerr=errors, capsize=5, elinewidth=.5, capthick=.5)
     plt.xlabel('iteration')
     plt.ylim((6,48))
     plt.title('Simplification with error bars')
-    plt.savefig('../graphs/unique_error.jpg')
+    plt.savefig('graphs/unique_error.jpg')
     plt.close()
 
 eval_unique_err(unique_res)
@@ -462,18 +383,6 @@ with open('monte_carlos_stds.txt', 'r') as g:
     mcs_std = json.loads(g.read())
 # ----------------------------------------------------------
 
-def plt_overlap(overlap_means):
-    for feat in overlap_means:
-        plt.plot(range(len(overlap_means[0])),feat)
-    plt.title('overlap graph')
-    plt.xlabel('iteration')
-    plt.ylabel('average overlap')
-    plt.legend(['0 features in common', '1 feature in commmon', '2 features in common'])
-    plt.savefig('../graphs/overlap_graph1.jpg')
-    plt.close()
-
-plt_overlap(overlap_means_feat)
-
 
 # convert overlap scores to z_scores (uniqueness value necessary and monte carlos values)
 def convert_overlap_z(overlap_means, mcs_m, mcs_std, uniqueness):
@@ -496,20 +405,6 @@ def convert_overlap_z(overlap_means, mcs_m, mcs_std, uniqueness):
 # generate z_scores
 z_scores_avg = convert_overlap_z(overlap_means_feat, mcs_m, mcs_std, unique_mean)
 
-
-# plot the z_scores
-def plt_overlap_z(overlap_zs):
-    for feat in overlap_zs:
-        plt.plot(range(len(overlap_zs[0])),feat)
-    plt.axhline(y=1.96, color='r', linestyle='-')
-    plt.title('overlap graph z-score')
-    plt.xlabel('iteration')
-    plt.ylabel('average overlap z-score')
-    plt.legend(['0 features in common', '1 feature in commmon', '2 features in common'])
-    plt.savefig('../graphs/overlap_graph_z_av.jpg')
-    plt.close()
-
-plt_overlap_z(z_scores_avg)
 
 # generate z_scores per sequence for error plot
 def z_scores_sequence(results, aliens, mcs_m, mcs_std):
@@ -543,134 +438,10 @@ def eval_overlap_z_err(feat_sequences):
     plt.axhline(y=1.96, color='r', linestyle='-')
     plt.title('overlap z-score per feat with error')
     plt.legend(['1.96 chance', '0 features in common', '1 feature in commmon', '2 features in common'])
-    plt.savefig('../graphs/overlap_z_error.jpg')
+    plt.savefig('graphs/overlap_z_error.jpg')
     plt.close()
 
 eval_overlap_z_err(z_scores_feat)
-
-
-
-# usefulness with attributes ----------------------------------
-
-# higher att is more useful, so 0 is less, 1 is normal, 2 is more
-def att_occ_counter(iteration):
-    counters= [0,0,0]
-    for alien in iteration:
-        for attribute in alien:
-            if attribute < 16:
-                counters[0] += 1
-            elif attribute < 32:
-                counters[1] += 1
-            else:
-                counters[2] += 1
-    return counters
-
-def att_occ_sequence(sequence):
-    counters_grouped = [[] for _ in range(3)]
-    for iteration in sequence:
-        it_counters = att_occ_counter(iteration)
-        for i in range(3):
-            counters_grouped[i].append(it_counters[i])
-    return counters_grouped
-
-def eval_att_occ_useful(results):
-    att_occ_all_counters = [[] for _ in range(3)]
-    for sequence in results:
-        for i in range(3):
-            att_occ_all_counters[i].append(att_occ_sequence(sequence)[i])
-    for counters_group in att_occ_all_counters:
-        means, errors = sequence_to_mean_error(counters_group)
-        plt.errorbar(range(len(means)), means, yerr=errors, capsize=5, elinewidth=.5, capthick=.5)
-    plt.ylabel('total attributes')
-    plt.xlabel('iteration')
-    plt.title('total number of attributes per usefulness group')
-    plt.legend(['low usefulness', 'normal usefulness', 'high usefulness'])
-    plt.savefig('../graphs/usefulness_total_occ.jpg')
-    plt.close()
-
-eval_att_occ_useful(results)
-
-def unique_att_grouped_useful(iteration):
-    att_groups = [[] for _ in range(3)]
-    for alien in iteration:
-        for attribute in alien:
-            if attribute < 16:
-                att_groups[0].append(attribute)
-            elif attribute < 32:
-                att_groups[1].append(attribute)               
-            else:
-                att_groups[2].append(attribute)
-    return att_groups
-
-def unique_att_grouped_sequence(sequence):
-    att_grouped = [[] for _ in range(3)]
-    for iteration in sequence:
-        it_grouped = unique_att_grouped_useful(iteration)
-        for i in range(3):
-            att_grouped[i].append(it_grouped[i])
-    return att_grouped
-
-def unique_att_grouped_counted(sequence):
-    att_grouped = unique_att_grouped_sequence(sequence)
-    groups_counted = [[] for _ in range(3)]
-    for i in range(3):
-        counters = []
-        for iteration in att_grouped[i]:
-            counters.append(len(set(iteration)))
-        groups_counted[i] = counters
-    return groups_counted
-
-def eval_unique_att_count(results):
-    unique_att_all_counters = [[] for _ in range(3)]
-    for sequence in results:
-        for i in range(3):
-            unique_att_all_counters[i].append(unique_att_grouped_counted(sequence)[i])
-    for counters_group in unique_att_all_counters:
-        means, errors = sequence_to_mean_error(counters_group)
-        plt.errorbar(range(len(means)), means, yerr=errors)
-
-    plt.ylabel('unique attributes')
-    plt.xlabel('iteration')
-    plt.title('unique number of attributes per usefulness group')
-    plt.legend(['low usefulness', 'normal usefulness', 'high usefulness'])
-    plt.savefig('../graphs/usefulness_unique_att.jpg')
-
-    plt.close()
-
-eval_unique_att_count(results)
-
-
-
-# evaluate 1 exception 47.
-def count_exception_seq(sequence):
-    counters = []
-    for iteration in sequence:
-        counter = 0
-        for alien in iteration:
-            if 47 in alien:
-                counter += 1
-        counters.append(counter)
-    return counters
-
-def count_exception_all(results):
-    all_counters = []
-    for sequence in results:
-        all_counters.append(count_exception_seq(sequence))
-    return all_counters
-
-def eval_exception(results):
-    all_counters = count_exception_all(results)
-    for counters in all_counters:
-        plt.plot(range(8), counters)
-    plt.title('exception graph')
-    plt.xlabel('iteration')
-    plt.ylabel('occurence of exception')
-
-    plt.savefig('../graphs/exception_graph1.jpg')
-    plt.close()
-
-eval_exception(results)
-
 
 
 # overlap per feat_type (color, movement, shape) -------------------------------------------------
@@ -731,18 +502,6 @@ col_overlap_scores_all, col_overlap_means_feat_all, col_overlap_means_it_all = o
 
 col_overlap_means_feat = feat_all_to_mean(col_overlap_means_feat_all)
 
-def plt_overlap_col(overlap_means):
-    for feat in overlap_means:
-        plt.plot(range(len(overlap_means[0])),feat)
-    plt.title('overlap graph')
-    plt.xlabel('iteration')
-    plt.ylabel('average overlap')
-    plt.legend(['color', 'shape', 'movement'])
-    plt.savefig('../graphs/color_overlap_graph1.jpg')
-    plt.close()
-
-plt_overlap_col(col_overlap_means_feat)
-
 # with z_score
 # generate z_scores per sequence for error plot
 def z_scores_sequence_col(results, aliens, mcs_m, mcs_std):
@@ -766,7 +525,7 @@ def eval_overlap_z_err_col(feat_sequences):
     plt.axhline(y=1.96, color='r', linestyle='-')
     plt.title('overlap z-score per feat with error')
     plt.legend(['1.96 chance', 'colour', 'shape', 'movement'])
-    plt.savefig('../graphs/col_overlap_z_error.jpg')
+    plt.savefig('graphs/col_overlap_z_error.jpg')
     plt.close()
 
 eval_overlap_z_err_col(col_z_scores_feat)

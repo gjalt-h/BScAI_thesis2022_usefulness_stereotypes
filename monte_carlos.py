@@ -1,10 +1,18 @@
+# ---------------------------------------
+# Afstudeerproject BSc KI
+# stereotype formation: cognitive modeling
+# Date: July 1st 2022
+# Supervisor: Katrin Schulz
+# 
+# Description: monte carlo trials for 
+# normalising structure scores.
+# ---------------------------------------
+
 import numpy as np
 import random
 import json
 
 def monte_carlo(total_n_att, n_aliens = 27, n_att=6, trials=12000):
-    # overlap_sum = 0
-    # std_sum = 0
     overlap_means = []
     for _ in range(trials):
         assigns = []
@@ -21,11 +29,7 @@ def monte_carlo(total_n_att, n_aliens = 27, n_att=6, trials=12000):
                     overlaps.append(overlap)
         # add mean overlap
         overlap_means.append(np.mean(overlaps))
-        # overlap_sum += np.mean(overlaps)
-        # std_sum += np.std(overlaps)
 
-    # total_avg_overlap = overlap_sum / trials
-    # total_avg_std = std_sum / trials
     total_avg_overlap = np.mean(overlap_means)
     total_avg_std = np.std(overlap_means)
 
